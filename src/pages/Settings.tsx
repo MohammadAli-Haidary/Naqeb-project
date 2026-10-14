@@ -1,8 +1,69 @@
 import { useState } from 'react';
-import { Database, Shield, Printer, Globe, Save, Download, Upload, RefreshCw, HardDrive, Monitor } from 'lucide-react';
+import { useStore } from '../backend/store';
+import { api } from '../backend/api';
+import { getTodayJalali } from '../backend/utils/date';
+import db from '../backend/database';
+import { Database, Shield, Printer, Globe, Save, Download, Upload, RefreshCw, HardDrive, Monitor, CheckCircle, AlertCircle } from 'lucide-react';
 
 export default function Settings() {
   const [tab, setTab] = useState('general');
+  const { settings, refreshAll } = useStore();
+  const [backupStatus, setBackupStatus] = useState<string>('');
+  const [dbStats, setDbStats] = useState(() => {
+    const stats = db.getDatabaseStats();
+    const size = db.getDatabaseSize();
+    return { stats, size };
+  });
+
+  const handleBackup = () => {
+    const result = api.system.backup();
+    if (result.success && result.data) {
+      const blob = new Blob([result.data], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `imperial_backup_${getTodayJalali()}.json`;
+      a.click();
+      URL.revokeObjectURL(url);
+      setBackupStatus('پشتیبان با موفقیت دانلود شد');
+      setDbStats({ stats: db.getDatabaseStats(), size: db.getDatabaseSize() });
+    } else {
+      setBackupStatus('خطا در تهیه پشتیبان');
+    }
+  };
+
+  const handleRestore = () => {
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.accept = '.json';
+    input.onchange = (e) => {
+      const file = (e.target as HTMLInputElement).files?.[0];
+      if (!file) return;
+      const reader = new FileReader();
+      reader.onload = (ev) => {
+        const content = ev.target?.result as string;
+        const result = api.system.restore(content);
+        if (result.success) {
+          setBackupStatus('بازیابی با موفقیت انجام شد');
+          refreshAll();
+          setDbStats({ stats: db.getDatabaseStats(), size: db.getDatabaseSize() });
+        } else {
+          setBackupStatus('خطا در بازیابی: ' + (result.error || ''));
+        }
+      };
+      reader.readAsText(file);
+    };
+    input.click();
+  };
+
+  const handleReset = () => {
+    if (confirm('آیا مطمئن هستید؟ تمام اطلاعات حذف خواهد شد!')) {
+      api.system.reset();
+      refreshAll();
+      setBackupStatus('دیتابیس بازنشانی شد');
+      setDbStats({ stats: db.getDatabaseStats(), size: db.getDatabaseSize() });
+    }
+  };
 
   return (
     <div className="space-y-6">
@@ -88,6 +149,29 @@ export default function Settings() {
         <div className="space-y-6">
           <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
             <h3 className="text-lg font-bold text-slate-800 mb-6">پشتیبان‌گیری و بازیابی</h3>
+      
+      {/* Status Message */}
+      {backupStatus && (
+        <div className={`mb-4 p-3 rounded-lg flex items-center gap-2 ${backupStatus.includes('خطا') ? 'bg-red-50 text-red-700 border border-red-200' : 'bg-green-50 text-green-700 border border-green-200'}`}>
+          {backupStatus.includes('خطا') ? <AlertCircle size={16} /> : <CheckCircle size={16} />}
+          <span className="text-sm">{backupStatus}</span>
+          <button onClick={() => setBackupStatus('')} className="mr-auto text-xs underline">بستن</button>
+        </div>
+      )}
+
+      {/* Database Stats */}
+      <div className="bg-slate-50 rounded-xl p-4 mb-6">
+        <h4 className="text-sm font-bold text-slate-700 mb-3">آمار دیتابیس</h4>
+        <div className="grid grid-cols-3 md:grid-cols-6 gap-3">
+          {Object.entries(dbStats.stats).map(([key, count]) => (
+            <div key={key} className="text-center p-2 bg-white rounded-lg border border-slate-100">
+              <p className="text-lg font-bold text-primary-600">{count}</p>
+              <p className="text-[10px] text-slate-400">{key.replace(/_/g, ' ')}</p>
+            </div>
+          ))}
+        </div>
+        <p className="text-xs text-slate-400 mt-3 text-center">اندازه دیتابیس: {dbStats.size} KB</p>
+      </div>
             
             {/* Current Status */}
             <div className="bg-slate-50 rounded-xl p-4 mb-6">
@@ -117,7 +201,7 @@ export default function Settings() {
                     <p className="text-xs text-slate-400">تهیه نسخه پشتیبان از دیتابیس</p>
                   </div>
                 </div>
-                <button className="w-full bg-primary-600 text-white py-2.5 rounded-lg text-sm font-medium hover:bg-primary-700 transition-colors">
+                <button onClick={handleBackup} className="w-full bg-primary-600 text-white py-2.5 rounded-lg text-sm font-medium hover:bg-primary-700 transition-colors">
                   تهیه پشتیبان جدید
                 </button>
               </div>
@@ -132,7 +216,7 @@ export default function Settings() {
                     <p className="text-xs text-slate-400">بازیابی از نسخه پشتیبان</p>
                   </div>
                 </div>
-                <button className="w-full bg-amber-500 text-white py-2.5 rounded-lg text-sm font-medium hover:bg-amber-600 transition-colors">
+                <button onClick={handleRestore} className="w-full bg-amber-500 text-white py-2.5 rounded-lg text-sm font-medium hover:bg-amber-600 transition-colors">
                   انتخاب فایل پشتیبان
                 </button>
               </div>
@@ -179,6 +263,19 @@ export default function Settings() {
                   <input type="checkbox" defaultChecked className="sr-only peer" />
                   <div className="w-11 h-6 bg-slate-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:-translate-x-full rtl:peer-checked:after:translate-x-full after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
                 </label>
+              </div>
+            </div>
+
+            {/* Reset Database */}
+            <div className="mt-6 p-4 bg-red-50 rounded-xl border border-red-100">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm font-medium text-red-700">بازنشانی دیتابیس</p>
+                  <p className="text-xs text-red-500">حذف تمام اطلاعات و شروع از اول</p>
+                </div>
+                <button onClick={handleReset} className="px-4 py-2 bg-red-600 text-white rounded-lg text-sm font-medium hover:bg-red-700 transition-colors">
+                  بازنشانی
+                </button>
               </div>
             </div>
           </div>
@@ -294,15 +391,15 @@ export default function Settings() {
               </div>
               <div className="flex items-center justify-between p-3 rounded-lg bg-slate-50">
                 <span className="text-sm text-slate-600">سیستم‌عامل</span>
-                <span className="text-sm font-medium text-slate-800">Windows 11</span>
+                <span className="text-sm font-medium text-slate-800">Web Browser (localStorage)</span>
               </div>
               <div className="flex items-center justify-between p-3 rounded-lg bg-slate-50">
-                <span className="text-sm text-slate-600">نوع دیتابیس</span>
-                <span className="text-sm font-medium text-slate-800">SQLite 3.42</span>
+                <span className="text-sm text-slate-600">نوع ذخیره‌سازی</span>
+                <span className="text-sm font-medium text-slate-800">localStorage (آماده SQLite)</span>
               </div>
               <div className="flex items-center justify-between p-3 rounded-lg bg-slate-50">
                 <span className="text-sm text-slate-600">اندازه دیتابیس</span>
-                <span className="text-sm font-medium text-slate-800">۱۲.۵ MB</span>
+                <span className="text-sm font-medium text-slate-800">{dbStats.size} KB</span>
               </div>
             </div>
             <div className="space-y-4">
@@ -316,11 +413,11 @@ export default function Settings() {
               </div>
               <div className="flex items-center justify-between p-3 rounded-lg bg-slate-50">
                 <span className="text-sm text-slate-600">تقویم</span>
-                <span className="text-sm font-medium text-slate-800">هجری شمسی</span>
+                <span className="text-sm font-medium text-slate-800">{settings.calendar === 'jalali' ? 'هجری شمسی' : 'میلادی'}</span>
               </div>
               <div className="flex items-center justify-between p-3 rounded-lg bg-slate-50">
                 <span className="text-sm text-slate-600">واحد پول</span>
-                <span className="text-sm font-medium text-slate-800">افغانی (؋)</span>
+                <span className="text-sm font-medium text-slate-800">افغانی ({settings.currencySymbol})</span>
               </div>
             </div>
           </div>

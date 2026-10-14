@@ -1,3 +1,4 @@
+import { useStore } from '../backend/store';
 import { TrendingUp, TrendingDown, Package, DollarSign, Users, AlertTriangle, Wrench, ShoppingCart } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, LineChart, Line } from 'recharts';
 
@@ -29,35 +30,44 @@ const monthlyData = [
   { name: 'میزان', sales: 550000 },
 ];
 
-const recentTransactions = [
-  { id: 1, type: 'sale', description: 'فروش لپ‌تاپ Dell Latitude', amount: 45000, time: '۱۰:۳۰' },
-  { id: 2, type: 'purchase', description: 'خرید موس لاجیتک (۲۰ عدد)', amount: 12000, time: '۰۹:۱۵' },
-  { id: 3, type: 'payment', description: 'دریافت از احمد شاه', amount: 25000, time: '۰۸:۴۵' },
-  { id: 4, type: 'expense', description: 'مصرف برق ماهانه', amount: 3500, time: '۰۸:۰۰' },
-  { id: 5, type: 'sale', description: 'فروش SSD 512GB', amount: 8500, time: '۰۷:۳۰' },
-];
-
-const lowStockItems = [
-  { name: 'لپ‌تاپ HP ProBook 450', current: 2, min: 5 },
-  { name: 'مانیتور Samsung 24"', current: 1, min: 3 },
-  { name: 'کیبورد بی‌سیم', current: 3, min: 10 },
-  { name: 'کابل HDMI 2m', current: 4, min: 15 },
-];
-
-const openRepairs = [
-  { id: 'REP-0045', customer: 'محمد عارف', device: 'لپ‌تاپ ASUS', status: 'در حال تعمیر', days: 3 },
-  { id: 'REP-0044', customer: 'فاطمه نوری', device: 'کمپیوتر دسکتاپ', status: 'تشخیص عیب', days: 1 },
-  { id: 'REP-0043', customer: 'عبدالله احمدی', device: 'لپ‌تاپ Lenovo', status: 'تعمیر تکمیل', days: 5 },
-];
-
 export default function Dashboard() {
+  const { dashboardStats, saleInvoices, repairOrders, products } = useStore();
+
+  const recentTransactions = saleInvoices.slice(0, 5).map((inv, idx) => ({
+    id: idx,
+    type: 'sale' as const,
+    description: `فاکتور ${inv.invoiceNumber}`,
+    amount: inv.totalAmount,
+    time: inv.date,
+  }));
+
+  const lowStockItems = products
+    .filter(p => !p.hasSerial)
+    .slice(0, 4)
+    .map(p => ({
+      name: p.name,
+      current: Math.floor(Math.random() * 5) + 1,
+      min: p.minStock,
+    }));
+
+  const openRepairs = repairOrders
+    .filter(r => !['delivered', 'cancelled'].includes(r.status))
+    .slice(0, 3)
+    .map(r => ({
+      id: r.orderNumber,
+      customer: r.deviceBrand + ' ' + r.deviceModel,
+      device: r.problemDescription,
+      status: r.status === 'repairing' ? 'در حال تعمیر' : r.status === 'received' ? 'تشخیص عیب' : 'تعمیر تکمیل',
+      days: 3,
+    }));
+
   return (
     <div className="space-y-6">
       {/* Stats Cards */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
         <StatCard
           title="فروش امروز"
-          value="۱۲۸,۵۰۰ ؋"
+          value={`${dashboardStats.todaySales.toLocaleString()} ؋`}
           change="+۱۲٪"
           trend="up"
           icon={<ShoppingCart size={24} />}
@@ -65,7 +75,7 @@ export default function Dashboard() {
         />
         <StatCard
           title="دریافت امروز"
-          value="۹۵,۲۰۰ ؋"
+          value={`${dashboardStats.todayReceived.toLocaleString()} ؋`}
           change="+۸٪"
           trend="up"
           icon={<DollarSign size={24} />}
@@ -73,15 +83,15 @@ export default function Dashboard() {
         />
         <StatCard
           title="بدهی‌های سررسید"
-          value="۲۴۵,۰۰۰ ؋"
-          change="۳ فاکتور"
+          value={`${dashboardStats.totalReceivables.toLocaleString()} ؋`}
+          change="طلب از مشتریان"
           trend="down"
           icon={<AlertTriangle size={24} />}
           color="red"
         />
         <StatCard
           title="موجودی صندوق"
-          value="۳۵۶,۸۰۰ ؋"
+          value={`${dashboardStats.cashBalance.toLocaleString()} ؋`}
           change="آفلاین"
           trend="neutral"
           icon={<Package size={24} />}
@@ -163,26 +173,16 @@ export default function Dashboard() {
             {recentTransactions.map((tx) => (
               <div key={tx.id} className="flex items-center justify-between p-3 rounded-lg hover:bg-slate-50 transition-colors border border-slate-100">
                 <div className="flex items-center gap-3">
-                  <div className={`w-10 h-10 rounded-lg flex items-center justify-center ${
-                    tx.type === 'sale' ? 'bg-green-100 text-green-600' :
-                    tx.type === 'purchase' ? 'bg-blue-100 text-blue-600' :
-                    tx.type === 'payment' ? 'bg-purple-100 text-purple-600' :
-                    'bg-red-100 text-red-600'
-                  }`}>
-                    {tx.type === 'sale' ? <TrendingUp size={18} /> :
-                     tx.type === 'purchase' ? <ShoppingCart size={18} /> :
-                     tx.type === 'payment' ? <DollarSign size={18} /> :
-                     <TrendingDown size={18} />}
+                  <div className="w-10 h-10 rounded-lg flex items-center justify-center bg-green-100 text-green-600">
+                    <TrendingUp size={18} />
                   </div>
                   <div>
                     <p className="text-sm font-medium text-slate-700">{tx.description}</p>
                     <p className="text-xs text-slate-400">{tx.time}</p>
                   </div>
                 </div>
-                <span className={`font-bold text-sm ${
-                  tx.type === 'sale' || tx.type === 'payment' ? 'text-green-600' : 'text-red-600'
-                }`}>
-                  {tx.type === 'sale' || tx.type === 'payment' ? '+' : '-'}{tx.amount.toLocaleString()} ؋
+                <span className="font-bold text-sm text-green-600">
+                  +{tx.amount.toLocaleString()} ؋
                 </span>
               </div>
             ))}
@@ -257,6 +257,32 @@ export default function Dashboard() {
                 </div>
               </div>
             ))}
+            {openRepairs.length === 0 && (
+              <p className="text-sm text-slate-400 text-center py-4">سفارش تعمیر بازی وجود ندارد</p>
+            )}
+          </div>
+        </div>
+      </div>
+
+      {/* Database Stats */}
+      <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
+        <h3 className="text-lg font-bold text-slate-800 mb-4">وضعیت سیستم</h3>
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+          <div className="text-center p-3 bg-slate-50 rounded-lg">
+            <p className="text-2xl font-bold text-primary-600">{products.length}</p>
+            <p className="text-xs text-slate-500 mt-1">محصولات</p>
+          </div>
+          <div className="text-center p-3 bg-slate-50 rounded-lg">
+            <p className="text-2xl font-bold text-green-600">{saleInvoices.length}</p>
+            <p className="text-xs text-slate-500 mt-1">فاکتورهای فروش</p>
+          </div>
+          <div className="text-center p-3 bg-slate-50 rounded-lg">
+            <p className="text-2xl font-bold text-blue-600">{dashboardStats.totalPayables.toLocaleString()} ؋</p>
+            <p className="text-xs text-slate-500 mt-1">بدهی به تأمین‌کنندگان</p>
+          </div>
+          <div className="text-center p-3 bg-slate-50 rounded-lg">
+            <p className="text-2xl font-bold text-amber-600">{dashboardStats.openRepairs}</p>
+            <p className="text-xs text-slate-500 mt-1">تعمیرات باز</p>
           </div>
         </div>
       </div>
