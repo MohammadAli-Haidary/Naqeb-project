@@ -2,7 +2,8 @@ import { Outlet, NavLink, useLocation } from 'react-router-dom';
 import { 
   LayoutDashboard, Package, Warehouse, ShoppingCart, 
   DollarSign, Users, Truck, Calculator, Wrench, 
-  BarChart3, Settings, Menu, X, Bell, LogOut
+  BarChart3, Settings, Menu, X, Bell, LogOut,
+  BookOpen
 } from 'lucide-react';
 
 interface LayoutProps {
@@ -22,6 +23,7 @@ const navItems = [
   { path: '/repairs', label: 'تعمیرات و ضمانت', icon: Wrench },
   { path: '/reports', label: 'گزارش‌ها', icon: BarChart3 },
   { path: '/settings', label: 'تنظیمات', icon: Settings },
+  { path: '/setup', label: 'راهنمای نصب SQLite', icon: BookOpen },
 ];
 
 export default function Layout({ sidebarOpen, setSidebarOpen }: LayoutProps) {
