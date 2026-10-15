@@ -12,6 +12,7 @@ import Finance from './pages/Finance';
 import Repairs from './pages/Repairs';
 import Reports from './pages/Reports';
 import Settings from './pages/Settings';
+import SetupGuide from './pages/SetupGuide';
 
 function App() {
   const [sidebarOpen, setSidebarOpen] = useState(true);
@@ -32,6 +33,7 @@ function App() {
           <Route path="repairs" element={<Repairs />} />
           <Route path="reports" element={<Reports />} />
           <Route path="settings" element={<Settings />} />
+          <Route path="setup" element={<SetupGuide />} />
         </Route>
       </Routes>
     </Router>
